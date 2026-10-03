@@ -7,5 +7,16 @@ if(-not (Test-Path -LiteralPath $backendPath -PathType Leaf)){throw 'Cheverton b
 $node=(Get-Command node.exe -ErrorAction Stop).Source
 $env:CHIEF_WORKDIR=$backendRootPath
 $env:CHIEF_BACKEND_PATH=$backendPath
+if(-not $env:CHEVERTON_CODEX_EXECUTABLE){
+  $codex=Get-Command codex.exe -ErrorAction SilentlyContinue
+  if(-not $codex){
+    $codexRoot=Join-Path $env:LOCALAPPDATA 'OpenAI\Codex\bin'
+    if(Test-Path -LiteralPath $codexRoot -PathType Container){
+      $codex=Get-ChildItem -LiteralPath $codexRoot -Filter codex.exe -File -Recurse -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    }
+  }
+  if($codex){$env:CHEVERTON_CODEX_EXECUTABLE=$codex.Source -as [string];if(-not $env:CHEVERTON_CODEX_EXECUTABLE){$env:CHEVERTON_CODEX_EXECUTABLE=$codex.FullName}}
+}
 & $node (Join-Path $PSScriptRoot 'the-chief.mjs')
 exit $LASTEXITCODE
