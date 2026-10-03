@@ -16,6 +16,8 @@ The backend still contains the business task engine. The Chief is the independen
 
 The Cheverton backend uses its own orchestration layer for agent selection, task/model weight, competency checks, review, approvals, and agent audit. The Chief supervises that layer; it does not let an LLM choose its own authority or provider. A direct agent assignment remains assigned to that agent. Automatic simple tasks use local Qwen when available; harder work escalates through hosted model tiers. External actions remain governed by the backend's approval controls.
 
+See [ORCHESTRATION.md](ORCHESTRATION.md) for the task path, model-tier policy, restart rules, audit fields, and status interfaces.
+
 ## Install and operate (Windows)
 
 Requires Node.js 24+ and an existing Cheverton backend checkout. From the Cheverton checkout, run:
