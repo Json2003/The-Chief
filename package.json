@@ -1,0 +1,9 @@
+{
+  "name": "the-chief",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Independent, local-only supervisor for Cheverton's orchestration backend",
+  "engines": { "node": ">=24" },
+  "scripts": { "test": "node --test tests/*.test.mjs" }
+}
