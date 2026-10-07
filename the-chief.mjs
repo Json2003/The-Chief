@@ -8,6 +8,7 @@ import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {readChiefRuntimePreference} from './chief-runtime-preference.mjs';
 import {chiefRecoveryDecision} from './the-chief-policy.mjs';
+import {ROUTES,consoleKeyFile,createGate,ensureIntakeKey,forwardToConsole,handleGateway,intakeKeyFile,readKey} from './chief-gateway.mjs';
 
 const root=resolve(process.env.CHIEF_WORKDIR||fileURLToPath(new URL('..',import.meta.url)));
 const backend=resolve(process.env.CHIEF_BACKEND_PATH||resolve(root,'apps/administration-console/server.mjs'));
@@ -61,12 +62,30 @@ async function check(){
   finally{checking=false;}
 }
 
-const service=createServer((request,response)=>{
+// Front door for task inputs and pause/resume. The Chief reads the console key
+// at request time and never logs or returns it. If the intake key cannot be
+// created, the gateway stays closed (authorize fails) and supervision continues.
+let intakeKey=null;
+try{intakeKey=ensureIntakeKey(intakeKeyFile());}catch{lastError='intake-key-unavailable';}
+const gate=createGate({maxInFlight:Number(process.env.CHIEF_MAX_IN_FLIGHT)||6});
+const gateway={intakeKey,gate,port:chiefPort,consolePort:backendPort,
+  // Repeated console failures stop new work. Resuming needs an explicit acknowledgement.
+  onTrip:async()=>{
+    try{
+      const key=readKey(consoleKeyFile());
+      if(key)await forwardToConsole({route:ROUTES['POST /control/drain'],consoleKey:key,port:backendPort});
+      lastAction='breaker-drained';
+    }catch{lastError='breaker-drain-failed';}
+  }};
+
+const service=createServer(async(request,response)=>{
+  try{if(await handleGateway(request,response,gateway))return;}
+  catch{if(!response.headersSent){response.writeHead(500);}response.end();return;}
   if(request.method!=='GET'||!['/health','/status'].includes(request.url)){
     response.writeHead(404);response.end();return;
   }
   response.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
-  response.end(JSON.stringify({ok:true,name:'The Chief',pid:process.pid,backendPid:child?.exitCode===null?child.pid:null,action:lastAction,restarts,lastError,startedAt:new Date(startedAt).toISOString()}));
+  response.end(JSON.stringify({ok:true,name:'The Chief',pid:process.pid,backendPid:child?.exitCode===null?child.pid:null,action:lastAction,restarts,lastError,intake:{ready:Boolean(intakeKey),...gate.state},startedAt:new Date(startedAt).toISOString()}));
 });
 const startedAt=Date.now();
 service.on('error',error=>{console.error(`The Chief could not bind its private port: ${error.code}`);process.exitCode=1;});
