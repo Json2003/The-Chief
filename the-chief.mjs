@@ -3,7 +3,7 @@
 import {createServer} from 'node:http';
 import {spawn} from 'node:child_process';
 import {connect} from 'node:net';
-import {existsSync} from 'node:fs';
+import {existsSync,readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {readChiefRuntimePreference} from './chief-runtime-preference.mjs';
@@ -65,6 +65,8 @@ async function check(){
 // Front door for task inputs and pause/resume. The Chief reads the console key
 // at request time and never logs or returns it. If the intake key cannot be
 // created, the gateway stays closed (authorize fails) and supervision continues.
+let uiHtml=null;
+try{uiHtml=readFileSync(new URL('./chief-ui.html',import.meta.url),'utf8');}catch{}
 let intakeKey=null;
 try{intakeKey=ensureIntakeKey(intakeKeyFile());}catch{lastError='intake-key-unavailable';}
 const gate=createGate({maxInFlight:Number(process.env.CHIEF_MAX_IN_FLIGHT)||6});
@@ -81,6 +83,12 @@ const gateway={intakeKey,gate,port:chiefPort,consolePort:backendPort,
 const service=createServer(async(request,response)=>{
   try{if(await handleGateway(request,response,gateway))return;}
   catch{if(!response.headersSent){response.writeHead(500);}response.end();return;}
+  // The page holds no secrets; every call it makes still needs the intake key.
+  if(request.method==='GET'&&['/','/ui'].includes(request.url)){
+    if(![`127.0.0.1:${chiefPort}`,`localhost:${chiefPort}`].includes(request.headers.host)||!uiHtml){response.writeHead(404);response.end();return;}
+    response.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Frame-Options':'DENY','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"});
+    response.end(uiHtml);return;
+  }
   if(request.method!=='GET'||!['/health','/status'].includes(request.url)){
     response.writeHead(404);response.end();return;
   }

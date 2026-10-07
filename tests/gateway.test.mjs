@@ -15,12 +15,14 @@ test('only intake, pause/resume and status are reachable',()=>{
   for(const route of Object.values(ROUTES))assert.ok(!/approv|vault|email|payment|stripe|gmail|sms|settings/.test(route.target));
 });
 
-test('authorize needs loopback host, no browser origin and the intake key',()=>{
+test('authorize needs loopback host, no foreign origin and the intake key',()=>{
   const key='k'.repeat(43);
   const good={host:'127.0.0.1:4175',[INTAKE_HEADER]:key};
   assert.equal(authorize(good,key),true);
   assert.equal(authorize({...good,host:'evil.example:4175'},key),false);
-  assert.equal(authorize({...good,origin:'http://127.0.0.1:4175'},key),false);
+  assert.equal(authorize({...good,origin:'http://127.0.0.1:4175'},key),true);
+  assert.equal(authorize({...good,origin:'http://evil.example'},key),false);
+  assert.equal(authorize({...good,origin:'http://127.0.0.1:9999'},key),false);
   assert.equal(authorize({...good,'sec-fetch-site':'cross-site'},key),false);
   assert.equal(authorize({host:good.host},key),false);
   assert.equal(authorize({...good,[INTAKE_HEADER]:'x'.repeat(43)},key),false);

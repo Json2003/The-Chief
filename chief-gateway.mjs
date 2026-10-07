@@ -39,10 +39,13 @@ export function ensureIntakeKey(file){
   return key;
 }
 
-// Loopback host only, no browser origins (blocks CSRF and DNS rebinding), and the intake key.
+// Loopback host only, no foreign browser origins (blocks CSRF and DNS rebinding),
+// and the intake key. The Chief's own page may call it (same origin).
 export function authorize(headers,intakeKey,port=4175){
-  if(![`127.0.0.1:${port}`,`localhost:${port}`].includes(headers.host))return false;
-  if(headers.origin||headers['sec-fetch-site']==='cross-site')return false;
+  const hosts=[`127.0.0.1:${port}`,`localhost:${port}`];
+  if(!hosts.includes(headers.host))return false;
+  if(headers.origin&&!hosts.some(host=>headers.origin===`http://${host}`))return false;
+  if(headers['sec-fetch-site']==='cross-site')return false;
   const given=headers[INTAKE_HEADER];
   if(typeof given!=='string'||typeof intakeKey!=='string'||!KEY_PATTERN.test(intakeKey))return false;
   const a=Buffer.from(given),b=Buffer.from(intakeKey);
