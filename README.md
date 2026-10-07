@@ -59,6 +59,17 @@ The Chief also serves a small chat page at `http://127.0.0.1:4175/` (ask, assign
 
 Everything else, including approvals, vault, email, payments and settings, is not reachable and returns 404. Forwarded work is capped at 6 concurrent requests (`CHIEF_MAX_IN_FLIGHT`). After 5 consecutive console failures the breaker trips: intake stops and The Chief drains the console automatically. It never resumes on its own.
 
+## Remote access from your phone
+
+The Chief listens on loopback only and should never be exposed with a port forward. For the phone, put a private tunnel in front of it and tell The Chief the tunnel's exact hostname. With Tailscale (private to your own devices):
+
+1. Install Tailscale on the PC and the phone, signed in to the same account.
+2. On the PC: `tailscale serve --bg http://127.0.0.1:4175` (gives an HTTPS address like `https://pc-name.tailnet-name.ts.net`).
+3. Set the hostname once, then restart The Chief: `setx CHIEF_ALLOWED_HOSTS "pc-name.tailnet-name.ts.net"`.
+4. Open that address on the phone and paste the intake key. Do **not** use Tailscale Funnel, which makes it public.
+
+`CHIEF_ALLOWED_HOSTS` takes exact hostnames only (no wildcards or IP addresses). Any other `Host` or foreign `Origin` is refused, and every request still needs the intake key. Anyone who can reach the tunnel and holds that key can pause and resume your queue and start tasks, so keep the key private and rotate it by deleting `chief-intake.key` and restarting The Chief.
+
 To stop automatic supervision, disable the Windows task named `The Chief`. An already-running backend is intentionally left running if The Chief exits; stopping it separately should use the console's drain control.
 
 ## Public-repo boundary

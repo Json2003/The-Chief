@@ -39,12 +39,20 @@ export function ensureIntakeKey(file){
   return key;
 }
 
-// Loopback host only, no foreign browser origins (blocks CSRF and DNS rebinding),
+// Extra hostnames for remote access through a private tunnel (for example
+// Tailscale Serve), from CHIEF_ALLOWED_HOSTS. Exact names only: no wildcards, no bare IPs.
+export function parseAllowedHosts(value=''){
+  return String(value).split(',').map(host=>host.trim().toLowerCase()).filter(host=>/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:\d{1,5})?$/.test(host)&&!/^\d+(\.\d+){3}(:\d+)?$/.test(host));
+}
+export const allowedHostHeaders=(port=4175,extraHosts=[])=>[`127.0.0.1:${port}`,`localhost:${port}`,...extraHosts];
+export const hostAllowed=(headers,port=4175,extraHosts=[])=>allowedHostHeaders(port,extraHosts).includes(String(headers.host||'').toLowerCase());
+
+// Allowed hosts only, no foreign browser origins (blocks CSRF and DNS rebinding),
 // and the intake key. The Chief's own page may call it (same origin).
-export function authorize(headers,intakeKey,port=4175){
-  const hosts=[`127.0.0.1:${port}`,`localhost:${port}`];
-  if(!hosts.includes(headers.host))return false;
-  if(headers.origin&&!hosts.some(host=>headers.origin===`http://${host}`))return false;
+export function authorize(headers,intakeKey,port=4175,extraHosts=[]){
+  const hosts=allowedHostHeaders(port,extraHosts);
+  if(!hostAllowed(headers,port,extraHosts))return false;
+  if(headers.origin&&!hosts.some(host=>headers.origin===`http://${host}`||headers.origin===`https://${host}`))return false;
   if(headers['sec-fetch-site']==='cross-site')return false;
   const given=headers[INTAKE_HEADER];
   if(typeof given!=='string'||typeof intakeKey!=='string'||!KEY_PATTERN.test(intakeKey))return false;
@@ -85,11 +93,11 @@ export async function forwardToConsole({route,body,consoleKey,fetchImpl=fetch,po
 const isFailure=status=>status>=500&&status!==503;
 
 export async function handleGateway(request,response,options){
-  const {intakeKey,gate,fetchImpl=fetch,onTrip=()=>{},port=4175,consolePort=4173,consoleKeyPath=consoleKeyFile()}=options;
+  const {intakeKey,gate,fetchImpl=fetch,onTrip=()=>{},port=4175,consolePort=4173,consoleKeyPath=consoleKeyFile(),extraHosts=[]}=options;
   const route=ROUTES[`${request.method} ${request.url}`];
   if(!route)return false;
   const send=(status,payload)=>{response.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});response.end(typeof payload==='string'?payload:JSON.stringify(payload));};
-  if(!authorize(request.headers,intakeKey,port)){send(401,{ok:false,code:'unauthorized'});return true;}
+  if(!authorize(request.headers,intakeKey,port,extraHosts)){send(401,{ok:false,code:'unauthorized'});return true;}
 
   let body='',parsed={};
   if(route.method==='POST'){

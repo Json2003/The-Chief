@@ -4,7 +4,7 @@ import {createServer} from 'node:http';
 import {mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {INTAKE_HEADER,ROUTES,authorize,createGate,ensureIntakeKey,handleGateway,readKey} from '../chief-gateway.mjs';
+import {INTAKE_HEADER,ROUTES,parseAllowedHosts,authorize,createGate,ensureIntakeKey,handleGateway,readKey} from '../chief-gateway.mjs';
 
 const CONSOLE_KEY='c'.repeat(43);
 
@@ -139,4 +139,17 @@ test('status route is read-only and uses no body',()=>withGateway(async({call,ca
 test('the gateway source never logs or returns the console key',async()=>{
   const source=await readFile(new URL('../chief-gateway.mjs',import.meta.url),'utf8');
   assert.ok(!/console\.(log|error|warn)/.test(source));
+});
+
+test('remote hosts are exact names from the allowlist only',()=>{
+  assert.deepEqual(parseAllowedHosts('chief.tail1234.ts.net, Phone.Example.com:8443'),['chief.tail1234.ts.net','phone.example.com:8443']);
+  assert.deepEqual(parseAllowedHosts('*,localhost,10.0.0.5,evil,*.example.com,http://x.com'),[]);
+  const key='k'.repeat(43),extra=['chief.tail1234.ts.net'];
+  const remote={host:'chief.tail1234.ts.net',[INTAKE_HEADER]:key};
+  assert.equal(authorize(remote,key,4175,extra),true);
+  assert.equal(authorize({...remote,origin:'https://chief.tail1234.ts.net'},key,4175,extra),true);
+  assert.equal(authorize({...remote,origin:'https://evil.example'},key,4175,extra),false);
+  assert.equal(authorize(remote,key,4175,[]),false);
+  assert.equal(authorize({...remote,host:'other.ts.net'},key,4175,extra),false);
+  assert.equal(authorize({...remote,[INTAKE_HEADER]:'x'.repeat(43)},key,4175,extra),false);
 });
