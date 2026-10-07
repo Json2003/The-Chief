@@ -4,7 +4,7 @@ import {createServer} from 'node:http';
 import {mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {INTAKE_HEADER,ROUTES,parseAllowedHosts,authorize,createGate,ensureIntakeKey,handleGateway,readKey} from '../chief-gateway.mjs';
+import {INTAKE_HEADER,ROUTES,loadAllowedHosts,parseAllowedHosts,authorize,createGate,ensureIntakeKey,handleGateway,readKey} from '../chief-gateway.mjs';
 
 const CONSOLE_KEY='c'.repeat(43);
 
@@ -152,4 +152,18 @@ test('remote hosts are exact names from the allowlist only',()=>{
   assert.equal(authorize(remote,key,4175,[]),false);
   assert.equal(authorize({...remote,host:'other.ts.net'},key,4175,extra),false);
   assert.equal(authorize({...remote,[INTAKE_HEADER]:'x'.repeat(43)},key,4175,extra),false);
+});
+
+test('allowed hosts come from the env and a file, re-read each time',async()=>{
+  const directory=await mkdtemp(join(tmpdir(),'chief-hosts-'));
+  try{
+    const file=join(directory,'hosts.txt');
+    const env={CHIEF_ALLOWED_HOSTS_FILE:file};
+    assert.deepEqual(loadAllowedHosts(env),[]);
+    await writeFile(file,'pc.tail1.ts.net\r\n*.bad\r\n');
+    assert.deepEqual(loadAllowedHosts(env),['pc.tail1.ts.net']);
+    assert.deepEqual(loadAllowedHosts({...env,CHIEF_ALLOWED_HOSTS:'b.example.com'}),['b.example.com','pc.tail1.ts.net']);
+    await writeFile(file,'');
+    assert.deepEqual(loadAllowedHosts(env),[]);
+  }finally{await rm(directory,{recursive:true,force:true});}
 });

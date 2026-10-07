@@ -8,7 +8,7 @@ import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {readChiefRuntimePreference} from './chief-runtime-preference.mjs';
 import {chiefRecoveryDecision} from './the-chief-policy.mjs';
-import {ROUTES,consoleKeyFile,createGate,ensureIntakeKey,forwardToConsole,handleGateway,hostAllowed,intakeKeyFile,parseAllowedHosts,readKey} from './chief-gateway.mjs';
+import {ROUTES,consoleKeyFile,createGate,ensureIntakeKey,forwardToConsole,handleGateway,hostAllowed,intakeKeyFile,loadAllowedHosts,readKey} from './chief-gateway.mjs';
 
 const root=resolve(process.env.CHIEF_WORKDIR||fileURLToPath(new URL('..',import.meta.url)));
 const backend=resolve(process.env.CHIEF_BACKEND_PATH||resolve(root,'apps/administration-console/server.mjs'));
@@ -70,9 +70,8 @@ try{uiHtml=readFileSync(new URL('./chief-ui.html',import.meta.url),'utf8');}catc
 let intakeKey=null;
 try{intakeKey=ensureIntakeKey(intakeKeyFile());}catch{lastError='intake-key-unavailable';}
 const gate=createGate({maxInFlight:Number(process.env.CHIEF_MAX_IN_FLIGHT)||6});
-// Empty by default: loopback only. Set CHIEF_ALLOWED_HOSTS to a private tunnel hostname for phone access.
-const extraHosts=parseAllowedHosts(process.env.CHIEF_ALLOWED_HOSTS);
-const gateway={intakeKey,gate,port:chiefPort,consolePort:backendPort,extraHosts,
+// Loopback only by default. A private tunnel hostname is added through chief-allowed-hosts.txt or CHIEF_ALLOWED_HOSTS.
+const gateway={intakeKey,gate,port:chiefPort,consolePort:backendPort,get extraHosts(){return loadAllowedHosts();},
   // Repeated console failures stop new work. Resuming needs an explicit acknowledgement.
   onTrip:async()=>{
     try{
@@ -87,11 +86,11 @@ const service=createServer(async(request,response)=>{
   catch{if(!response.headersSent){response.writeHead(500);}response.end();return;}
   // The page holds no secrets; every call it makes still needs the intake key.
   if(request.method==='GET'&&['/','/ui'].includes(request.url)){
-    if(!hostAllowed(request.headers,chiefPort,extraHosts)||!uiHtml){response.writeHead(404);response.end();return;}
+    if(!hostAllowed(request.headers,chiefPort,loadAllowedHosts())||!uiHtml){response.writeHead(404);response.end();return;}
     response.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Frame-Options':'DENY','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"});
     response.end(uiHtml);return;
   }
-  if(request.method!=='GET'||!['/health','/status'].includes(request.url)||!hostAllowed(request.headers,chiefPort,extraHosts)){
+  if(request.method!=='GET'||!['/health','/status'].includes(request.url)||!hostAllowed(request.headers,chiefPort,loadAllowedHosts())){
     response.writeHead(404);response.end();return;
   }
   response.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});

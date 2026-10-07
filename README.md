@@ -61,14 +61,15 @@ Everything else, including approvals, vault, email, payments and settings, is no
 
 ## Remote access from your phone
 
-The Chief listens on loopback only and should never be exposed with a port forward. For the phone, put a private tunnel in front of it and tell The Chief the tunnel's exact hostname. With Tailscale (private to your own devices):
+The Chief listens on loopback only and should never be exposed with a port forward. For the phone, run the setup script once, on the PC, in PowerShell:
 
-1. Install Tailscale on the PC and the phone, signed in to the same account.
-2. On the PC: `tailscale serve --bg http://127.0.0.1:4175` (gives an HTTPS address like `https://pc-name.tailnet-name.ts.net`).
-3. Set the hostname once, then restart The Chief: `setx CHIEF_ALLOWED_HOSTS "pc-name.tailnet-name.ts.net"`.
-4. Open that address on the phone and paste the intake key. Do **not** use Tailscale Funnel, which makes it public.
+```powershell
+& .\scripts\Setup-ChiefRemote.ps1
+```
 
-`CHIEF_ALLOWED_HOSTS` takes exact hostnames only (no wildcards or IP addresses). Any other `Host` or foreign `Origin` is refused, and every request still needs the intake key. Anyone who can reach the tunnel and holds that key can pause and resume your queue and start tasks, so keep the key private and rotate it by deleting `chief-intake.key` and restarting The Chief.
+It installs Tailscale if needed (asks first), signs in, publishes The Chief to **your tailnet only** with `tailscale serve` (never Funnel), saves the tunnel hostname to `%LOCALAPPDATA%\Cheverton\console\chief-allowed-hosts.txt`, and restarts The Chief only if the console reports `ready-to-restart`. Then install Tailscale on your phone, sign in to the same account, open the printed `https://...ts.net` address, and paste the intake key once.
+
+Hostnames can also be set with `CHIEF_ALLOWED_HOSTS`. Only exact hostnames are accepted (no wildcards or IP addresses), any other `Host` or foreign `Origin` is refused, and every request still needs the intake key. Anyone on your tailnet who holds that key can pause and resume your queue and start tasks, so keep the key private. Rotate it by deleting `chief-intake.key` and restarting The Chief.
 
 To stop automatic supervision, disable the Windows task named `The Chief`. An already-running backend is intentionally left running if The Chief exits; stopping it separately should use the console's drain control.
 

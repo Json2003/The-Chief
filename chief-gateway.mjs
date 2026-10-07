@@ -44,6 +44,13 @@ export function ensureIntakeKey(file){
 export function parseAllowedHosts(value=''){
   return String(value).split(',').map(host=>host.trim().toLowerCase()).filter(host=>/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:\d{1,5})?$/.test(host)&&!/^\d+(\.\d+){3}(:\d+)?$/.test(host));
 }
+export const allowedHostsFile=(env=process.env)=>env.CHIEF_ALLOWED_HOSTS_FILE||join(dirname(consoleKeyFile(env)),'chief-allowed-hosts.txt');
+// Read on every request so the setup script can add a tunnel hostname without a restart.
+export function loadAllowedHosts(env=process.env){
+  let fromFile='';
+  try{fromFile=readFileSync(allowedHostsFile(env),'utf8').replace(/[\r\n]+/g,',');}catch{}
+  return parseAllowedHosts(`${env.CHIEF_ALLOWED_HOSTS||''},${fromFile}`);
+}
 export const allowedHostHeaders=(port=4175,extraHosts=[])=>[`127.0.0.1:${port}`,`localhost:${port}`,...extraHosts];
 export const hostAllowed=(headers,port=4175,extraHosts=[])=>allowedHostHeaders(port,extraHosts).includes(String(headers.host||'').toLowerCase());
 
